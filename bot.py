@@ -8,6 +8,7 @@ import os
 from dotenv import load_dotenv
 from utils.command_list import get_command_list
 from stock_analysis.stock_analysis import fetch_and_process_data
+from stock_analysis.goldenCrossScrapping import get_goldenCross
 
 # 환경 변수 로드
 load_dotenv()
@@ -30,12 +31,14 @@ async def on_ready():
 # /명령어목록
 @bot.tree.command(name="명령어목록", description="사용 가능한 명령어 목록을 표시합니다.")
 async def command_list(interaction: discord.Interaction):
+    print("/명령어목록")
     commands_info = get_command_list()
     await interaction.response.send_message(commands_info)
 
 # /주식분석
 @bot.tree.command(name="주식분석", description="주식 데이터를 분석하여 결과를 출력합니다.")
 async def stock_analysis(interaction: discord.Interaction):
+    print("/주식분석")
     start_time = time.time()  # 실행 시작 시간 기록
     formatted_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(start_time))
 
@@ -50,6 +53,19 @@ async def stock_analysis(interaction: discord.Interaction):
         # 파일
         file = io.StringIO(result_message)
         await interaction.followup.send("결과가 너무 길어 파일로 전송합니다.", file=discord.File(file, "stock_analysis_result.txt"))
+    else:
+        await interaction.followup.send(result_message)
+
+# /골든크로스
+@bot.tree.command(name="골든크로스", description="골든크로스 종목 데이터를 출력합니다.")
+async def stock_goldenCross(interaction: discord.Interaction):
+    print("/골든크로스")
+    await interaction.response.defer()
+    result_message = get_goldenCross()
+    print(result_message)
+    if len(result_message) > 2000:
+        file = io.StringIO(result_message)
+        await interaction.followup.send("결과가 너무 길어 파일로 전송합니다.", file=discord.File(file, "stock_goldenCross_result.txt"))
     else:
         await interaction.followup.send(result_message)
 
