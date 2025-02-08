@@ -1,5 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
+import time
 
 def get_goldenCross():
     print("get_goldenCross")
@@ -10,8 +11,9 @@ def get_goldenCross():
     # Find the table with class 'type_5'
     table = soup.find('table', {'class': 'type_5'})
     rows = table.find_all('tr')[2:]  # Skip header and empty row
-
-    output = ""
+    start_time = time.time()  # 실행 시작 시간 기록
+    formatted_time = time.strftime("%Y-%m-%d", time.localtime(start_time))
+    output = f"{formatted_time} 기준 골든크로스 종목\n"
     for row in rows:
         cols = row.find_all('td')
         if len(cols) > 1:
