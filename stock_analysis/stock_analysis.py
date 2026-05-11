@@ -86,8 +86,98 @@ def process_stock_data(ticker_info):
     condition3_up = (df["Baseline"] < df["ConversionLine"]) & (df["Baseline"].shift(1) >= df["ConversionLine"].shift(1)) & (df["Baseline"].shift(2) >= df["ConversionLine"].shift(2))
 
     # 이격도 예측값 설정
-    disparity_up = (df["Disparity"] > 98) & (df["Disparity"].shift(1) <= 98)
-    disparity_down = (df["Disparity"] < 102) & (df["Disparity"].shift(1) >= 102)
+    df["Disparity5"]  = (df["종가"] / df["MA5"])  * 100   # 단기 이격도
+    df["Disparity20"] = (df["종가"] / df["MA20"]) * 100   # 중기 이격도
+
+    DISPARITY_OVERBOUGHT  = 106   # 과열 기준
+    DISPARITY_OVERSOLD    = 94    # 침체 기준
+    DISPARITY_CENTER      = 100   # 중립 기준
+    DISPARITY_LOWER_LIMIT = 75
+    DISPARITY_UPPER_LIMIT = 130
+
+    # 침체 구간에서 100선 회복 → 매수 신호
+    disparity_up = (
+        (df["Disparity20"] > DISPARITY_CENTER) &          # 오늘 100 돌파
+        (df["Disparity20"].shift(1) <= DISPARITY_CENTER) & # 어제 100 이하
+        (df["Disparity20"].shift(2) < DISPARITY_OVERSOLD)  # 이틀 전 침체 구간 확인
+    )
+
+    # 과열 구간에서 100선 하락 → 매도 신호
+    disparity_down = (
+        (df["Disparity20"] < DISPARITY_CENTER) &           # 오늘 100 하락
+        (df["Disparity20"].shift(1) >= DISPARITY_CENTER) & # 어제 100 이상
+        (df["Disparity20"].shift(2) > DISPARITY_OVERBOUGHT) # 이틀 전 과열 구간 확인
+    )
+
+    # 침체 구간
+    oversold_zone = (
+        (df["Disparity20"] >= DISPARITY_LOWER_LIMIT) &
+        (df["Disparity20"] <= DISPARITY_OVERSOLD)
+    )
+
+    # 이격도 회복 확인
+    disparity_recovering = (
+        (df["Disparity20"] > df["Disparity20"].shift(1)) &
+        (df["Disparity5"] > df["Disparity5"].shift(1))
+    )
+
+    # 가격 반등 확인
+    price_recovering = (
+        df["종가"] > df["종가"].shift(1)
+    )
+
+    # 다른 예측과 방향 일치
+    other_up_signal = (
+        condition_up  | condition_up.shift(1)  | condition_up.shift(2)  |
+        condition2_up | condition2_up.shift(1) | condition2_up.shift(2) |
+        condition3_up | condition3_up.shift(1) | condition3_up.shift(2)
+    )
+
+    # 강한상승
+    disparity_extreme_up = (
+        oversold_zone &
+        disparity_recovering &
+        price_recovering &
+        other_up_signal
+    )
+
+    # 과열 구간
+    overbought_zone = (
+        (df["Disparity20"] >= DISPARITY_OVERBOUGHT) &
+        (df["Disparity20"] < DISPARITY_UPPER_LIMIT)
+    )
+
+    # 이격도 하락 확인
+    disparity_falling = (
+        (df["Disparity20"] < df["Disparity20"].shift(1)) &
+        (df["Disparity5"] < df["Disparity5"].shift(1))
+    )
+
+    # 가격 하락 확인
+    price_falling = (
+        df["종가"] < df["종가"].shift(1)
+    )
+
+    # 다른 예측과 방향 일치
+    other_down_signal = (
+        condition_down  | condition_down.shift(1)  | condition_down.shift(2)  |
+        condition2_down | condition2_down.shift(1) | condition2_down.shift(2) |
+        condition3_down | condition3_down.shift(1) | condition3_down.shift(2)
+    )
+
+    # 강한하락
+    disparity_extreme_down = (
+        overbought_zone &
+        disparity_falling &
+        price_falling &
+        other_down_signal
+    )
+
+    # 단기/중기 이격도 동시 확인으로 신뢰도 향상
+    disparity_confirm_up = (
+        (df["Disparity5"]  < DISPARITY_CENTER) &  # 단기도 침체
+        (df["Disparity20"] < DISPARITY_CENTER)    # 중기도 침체 → 강한 매수 신호
+    )
 
     df.loc[condition_down, "초단기예측"] = "하락"
     df.loc[condition_up, "초단기예측"] = "상승"
@@ -97,6 +187,9 @@ def process_stock_data(ticker_info):
     df.loc[condition3_up, "전환예측"] = "상승"
     df.loc[disparity_up, "이격도예측"] = "상승"
     df.loc[disparity_down, "이격도예측"] = "하락"
+    df.loc[disparity_extreme_up, "이격도예측"] = "강한상승"
+    df.loc[disparity_extreme_down, "이격도예측"] = "강한하락"
+    
 
     # 마지막 3개의 행에서 예측 데이터 필터링
     filtered_df = df.tail(3)
@@ -112,7 +205,8 @@ def process_stock_data(ticker_info):
                 "초단기예측": row["초단기예측"],
                 "단기예측": row["단기예측"],
                 "전환예측": row["전환예측"],
-                "이격도예측": row["이격도예측"]
+                "이격도예측": row["이격도예측"],
+                "이격도수치": round(row["Disparity20"], 2)
             })
     
     return output
@@ -125,48 +219,81 @@ def fetch_and_process_data(start_time, formatted_time):
         futures = {executor.submit(process_stock_data, ticker_info): ticker_info for ticker_info in ticker_list}
         
         for future in as_completed(futures):
-            result = future.result()
-            all_output.extend(result)
+            try:
+                result = future.result()
+                all_output.extend(result)
+            except Exception as e:
+                ticker_info = futures[future]
+                print(f"[오류] {ticker_info['name']}({ticker_info['ticker']}): {e}")
     
-    return result_message(all_output, start_time, formatted_time)
+    return build_result_message(all_output, start_time, formatted_time)
 
 # 결과 메시지 전송
-def result_message(output, start_time, formatted_time):
+def build_result_message(output, start_time, formatted_time):
     # 예측별 상승/하락 횟수 계산
-    category_count = defaultdict(lambda: {'상승': 0, '하락': 0})
-    date_count = defaultdict(lambda: {'상승': 0, '하락': 0, '종목': defaultdict(lambda: {'상승': 0, '하락': 0, 'ticker': None})})
+    category_count = defaultdict(lambda: {'강한상승': 0, '상승': 0, '하락': 0, '강한하락': 0})
+    date_count = defaultdict(lambda: {
+        '강한상승': 0, '상승': 0, '하락': 0, '강한하락': 0,
+        '종목': defaultdict(lambda: {
+            '강한상승': 0, '상승': 0, '하락': 0, '강한하락': 0,
+            'ticker': None, '이격도수치': None
+        })
+    })
 
     for record in output:
         date = record["날짜"]
         stock = record["종목명"]
         ticker = record["종목코드"]
+
+        ALL_SIGNALS = {'강한상승', '상승', '하락', '강한하락'}
+
         for key in ['초단기예측', '단기예측', '전환예측', '이격도예측']:
-            if record[key] == '상승':
-                category_count[key]['상승'] += 1
-                date_count[date]['상승'] += 1
-                date_count[date]['종목'][stock]['상승'] += 1
+            signal = record[key]
+            if signal in ALL_SIGNALS:
+                category_count[key][signal] += 1
+                date_count[date][signal] += 1
+                date_count[date]['종목'][stock][signal] += 1
                 date_count[date]['종목'][stock]['ticker'] = ticker
-            elif record[key] == '하락':
-                category_count[key]['하락'] += 1
-                date_count[date]['하락'] += 1
-                date_count[date]['종목'][stock]['하락'] += 1
-                date_count[date]['종목'][stock]['ticker'] = ticker
+                date_count[date]['종목'][stock]['이격도수치'] = record.get('이격도수치')
 
     # 결과 메시지 생성
     end_time = time.time()  # 실행 끝 시간 기록
     execution_time = end_time - start_time  # 실행 시간 계산
 
     result_message = f"분석 시간 : {formatted_time} (Execution time: {execution_time:.2f} seconds)\n\n"
-    result_message += "예측별 상승, 하락 횟수:\n"
+    result_message += "예측별 신호 횟수:\n"
     for category, counts in category_count.items():
-        result_message += f"{category}: 상승: {counts['상승']}, 하락: {counts['하락']}\n"
+        result_message += (
+            f"{category}: "
+            f"강한상승: {counts['강한상승']}, 상승: {counts['상승']}, "
+            f"하락: {counts['하락']}, 강한하락: {counts['강한하락']}\n"
+        )
 
-    result_message += "\n최근 3일 기준 종목별 상승, 하락 신호\n"
+    # 종목별 출력
+    result_message += "\n최근 3일 기준 종목별 신호\n"
     for date in sorted(date_count.keys(), reverse=True):
         counts = date_count[date]
         formatted_date = date.strftime("%Y-%m-%d")
-        result_message += f"날짜: {formatted_date} - 상승: {counts['상승']}, 하락: {counts['하락']}\n"
-        for stock, stock_counts in sorted(counts['종목'].items(), key=lambda x: x[1]['상승'], reverse=True):
-            result_message += f" - 종목: {stock} - 상승: {stock_counts['상승']}, 하락: {stock_counts['하락']}\n"
+        result_message += (
+            f"날짜: {formatted_date} - "
+            f"강한상승: {counts['강한상승']}, 상승: {counts['상승']}, "
+            f"하락: {counts['하락']}, 강한하락: {counts['강한하락']}\n"
+        )
+
+        # 종목 정렬 기준: 강한상승 → 상승 → 하락 → 강한하락 순
+        sorted_stocks = sorted(
+            counts['종목'].items(),
+            key=lambda x: (x[1]['강한상승'], x[1]['상승'], -x[1]['하락'], -x[1]['강한하락']),
+            reverse=True
+        )
+
+        for stock, sc in sorted_stocks:
+            disparity = f", 이격도: {sc['이격도수치']}" if sc['이격도수치'] else ""
+            result_message += (
+                f" - {stock}({sc['ticker']}) "
+                f"강한상승: {sc['강한상승']}, 상승: {sc['상승']}, "
+                f"하락: {sc['하락']}, 강한하락: {sc['강한하락']}"
+                f"{disparity}\n"
+            )
     
     return result_message
