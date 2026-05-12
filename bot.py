@@ -7,6 +7,7 @@ import xml.etree.ElementTree as ET
 import os
 from dotenv import load_dotenv
 from utils.command_list import get_command_list
+from utils.scheduler import daily_stock_scheduler
 from stock_analysis.stock_analysis import fetch_and_process_data
 from stock_analysis.goldenCrossScrapping import get_goldenCross
 
@@ -27,6 +28,10 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 async def on_ready():
     print(f"Logged in as {bot.user}")
     await bot.tree.sync()  # 슬래시 명령어 동기화
+    # 스케줄러 태스크 등록
+    channel_id = int(os.getenv("STOCK_CHANNEL_ID"))
+    bot.loop.create_task(daily_stock_scheduler(bot, channel_id))
+    print(f"[스케줄러] 등록 완료 - 채널 ID: {channel_id}")
 
 # /명령어목록
 @bot.tree.command(name="명령어목록", description="사용 가능한 명령어 목록을 표시합니다.")
