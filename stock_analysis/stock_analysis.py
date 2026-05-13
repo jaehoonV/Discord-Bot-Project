@@ -1,4 +1,4 @@
-
+import os
 import pandas as pd
 import requests
 from io import StringIO
@@ -7,6 +7,10 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from collections import defaultdict
 import time
 import csv
+from dotenv import load_dotenv
+
+load_dotenv()
+MAX_WORKERS = int(os.getenv("STOCK_ANALYSIS_WORKERS", "2"))
 
 # 네이버 주식
 headers = {'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36'}
@@ -215,7 +219,8 @@ def process_stock_data(ticker_info):
 def fetch_and_process_data(start_time, formatted_time):
     ticker_list = get_ticker_list()
     all_output = []
-    with ProcessPoolExecutor(max_workers=8) as executor:  # 최대 8개의 프로세스 사용
+    print(MAX_WORKERS)
+    with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:  # 최대 8개의 프로세스 사용
         futures = {executor.submit(process_stock_data, ticker_info): ticker_info for ticker_info in ticker_list}
         
         for future in as_completed(futures):
