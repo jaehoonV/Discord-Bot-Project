@@ -219,7 +219,6 @@ def process_stock_data(ticker_info):
 def fetch_and_process_data(start_time, formatted_time):
     ticker_list = get_ticker_list()
     all_output = []
-    print(MAX_WORKERS)
     with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:  # 최대 8개의 프로세스 사용
         futures = {executor.submit(process_stock_data, ticker_info): ticker_info for ticker_info in ticker_list}
         

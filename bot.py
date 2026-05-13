@@ -63,14 +63,11 @@ async def stock_analysis(interaction: discord.Interaction):
 
         if len(result_message) > 1900:
             # 파일
-            file_path = "stock_analysis_result.txt"
-
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(result_message)
+            file = io.BytesIO(result_message.encode("utf-8"))
 
             await interaction.followup.send(
                 "결과가 너무 길어 파일로 전송합니다.",
-                file=discord.File(file_path)
+                file=discord.File(file, filename="stock_analysis_result.txt")
             )
         else:
             await interaction.followup.send(result_message)
@@ -86,9 +83,8 @@ async def stock_goldenCross(interaction: discord.Interaction):
     print("/골든크로스")
     await interaction.response.defer()
     result_message = get_goldenCross()
-    print(result_message)
     if len(result_message) > 2000:
-        file = io.StringIO(result_message)
+        file = io.BytesIO(result_message.encode("utf-8"))
         await interaction.followup.send("결과가 너무 길어 파일로 전송합니다.", file=discord.File(file, "stock_goldenCross_result.txt"))
     else:
         await interaction.followup.send(result_message)
