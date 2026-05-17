@@ -13,6 +13,7 @@ from utils.scheduler import daily_stock_scheduler
 from stock_analysis.stock_analysis import fetch_and_process_data
 from stock_analysis.goldenCrossScrapping import get_goldenCross
 from stock_analysis.USIndicatorsScraping import get_market_indicator_report
+from stock_analysis.exchangeRate import get_exchange_rate_report
 
 # 환경 변수 로드
 load_dotenv()
@@ -108,6 +109,24 @@ async def economic_indicators(interaction: discord.Interaction):
 
     except Exception as e:
         await interaction.followup.send(f"경제지표 조회 중 오류가 발생했습니다.\n```{e}```")
+
+# /환율
+@bot.tree.command(name="환율", description="원화 기준 주요 통화 환율을 조회합니다.")
+async def exchange_rate(interaction: discord.Interaction):
+    print("/환율")
+    await interaction.response.defer(thinking=True)
+
+    try:
+        result_message = await asyncio.to_thread(get_exchange_rate_report)
+
+        if len(result_message) > 2000:
+            file = io.BytesIO(result_message.encode("utf-8"))
+            await interaction.followup.send("결과가 너무 길어 파일로 전송합니다.", file=discord.File(file, "exchange_rate_result.txt"))
+        else:
+            await interaction.followup.send(result_message)
+
+    except Exception as e:
+        await interaction.followup.send(f"환율 조회 중 오류가 발생했습니다.\n```{e}```")
 
 # 봇 실행
 if __name__ == '__main__':
