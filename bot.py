@@ -14,6 +14,7 @@ from stock_analysis.stock_analysis import fetch_and_process_data
 from stock_analysis.goldenCrossScrapping import get_goldenCross
 from stock_analysis.USIndicatorsScraping import get_market_indicator_report
 from stock_analysis.exchangeRate import get_exchange_rate_report
+from stock_analysis.stockNews import get_stock_news
 
 # 환경 변수 로드
 load_dotenv()
@@ -127,6 +128,28 @@ async def exchange_rate(interaction: discord.Interaction):
 
     except Exception as e:
         await interaction.followup.send(f"환율 조회 중 오류가 발생했습니다.\n```{e}```")
+
+# /주식뉴스
+@bot.tree.command(name="주식뉴스", description="종목명으로 관련 최신 뉴스를 조회합니다.")
+@app_commands.describe(종목명="검색할 종목명 (예: 삼성전자, AAPL, 테슬라)")
+async def stock_news(interaction: discord.Interaction, 종목명: str):
+    print(f"/주식뉴스 - {종목명}")
+    await interaction.response.defer(thinking=True)
+
+    try:
+        result_message = await asyncio.to_thread(get_stock_news, 종목명)
+
+        if len(result_message) > 2000:
+            file = io.BytesIO(result_message.encode("utf-8"))
+            await interaction.followup.send(
+                "결과가 너무 길어 파일로 전송합니다.",
+                file=discord.File(file, "stock_news_result.txt")
+            )
+        else:
+            await interaction.followup.send(result_message)
+
+    except Exception as e:
+        await interaction.followup.send(f"뉴스 조회 중 오류가 발생했습니다.\n```{e}```")
 
 # 봇 실행
 if __name__ == '__main__':
